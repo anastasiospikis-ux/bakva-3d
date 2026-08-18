@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>BAKVA Metaverse</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.min.js"></script>
@@ -22,22 +22,21 @@
         
         <!-- Header -->
         <header class="flex justify-between items-center pointer-events-auto bg-gray-900/80 p-3 rounded-2xl border border-gray-800 backdrop-blur-md">
+            <h1 class="text-xl font-bold">BAKVA <span class="text-yellow-400">Metaverse</span></h1>
             <div class="flex items-center gap-2">
-                <h1 class="text-xl font-bold">BAKVA <span class="text-yellow-400">Metaverse</span></h1>
-            </div>
-            <div class="flex items-center gap-2">
-                <!-- Κουμπί Μουσικής -->
                 <button id="soundBtn" class="bg-gray-800 hover:bg-gray-700 p-2.5 rounded-full border border-gray-700 transition">🔈</button>
-                <!-- Wallet Button -->
                 <button id="connectBtn" class="bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded-full font-bold text-sm transition shadow-lg">Connect Wallet</button>
             </div>
         </header>
 
-        <!-- Center HUD / Instructions -->
-        <div class="text-center pointer-events-auto">
-            <div class="inline-block bg-gray-900/60 px-4 py-2 rounded-xl border border-gray-800 backdrop-blur-sm text-yellow-300 text-sm font-mono">
-                Use <span class="text-white font-bold">W, A, S, D</span> to Move
-            </div>
+        <!-- Mobile Touch Controls (Εικονικά πλήκτρα για κινητό) -->
+        <div class="pointer-events-auto grid grid-cols-3 gap-2 w-36 mx-auto mb-2 md:hidden">
+            <div></div>
+            <button id="btnW" class="bg-gray-800/80 border border-gray-700 active:bg-yellow-500 text-white p-3 rounded-xl font-bold">▲</button>
+            <div></div>
+            <button id="btnA" class="bg-gray-800/80 border border-gray-700 active:bg-yellow-500 text-white p-3 rounded-xl font-bold">◀</button>
+            <button id="btnS" class="bg-gray-800/80 border border-gray-700 active:bg-yellow-500 text-white p-3 rounded-xl font-bold">▼</button>
+            <button id="btnD" class="bg-gray-800/80 border border-gray-700 active:bg-yellow-500 text-white p-3 rounded-xl font-bold">▶</button>
         </div>
 
         <!-- Footer Menu -->
@@ -95,9 +94,22 @@
             ground.rotation.x = -Math.PI / 2;
             scene.add(ground);
 
-            // Keyboard Events
+            // Keyboard Events (Για Υπολογιστή)
             window.addEventListener('keydown', e => { if(keys.hasOwnProperty(e.key.toLowerCase())) keys[e.key.toLowerCase()] = true; });
             window.addEventListener('keyup', e => { if(keys.hasOwnProperty(e.key.toLowerCase())) keys[e.key.toLowerCase()] = false; });
+
+            // Touch Events (Για Κινητό)
+            const bindTouch = (id, key) => {
+                const el = document.getElementById(id);
+                el.addEventListener('touchstart', (e) => { e.preventDefault(); keys[key] = true; });
+                el.addEventListener('touchend', (e) => { e.preventDefault(); keys[key] = false; });
+                el.addEventListener('mousedown', () => keys[key] = true);
+                el.addEventListener('mouseup', () => keys[key] = false);
+            };
+            bindTouch('btnW', 'w');
+            bindTouch('btnS', 's');
+            bindTouch('btnA', 'a');
+            bindTouch('btnD', 'd');
 
             window.addEventListener('resize', () => {
                 camera.aspect = window.innerWidth / window.innerHeight;
