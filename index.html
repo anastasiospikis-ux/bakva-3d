@@ -2,86 +2,85 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>BAKVA Metaverse</title>
+    <title>BAKVA Metaverse - Guardians Edition</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.min.js"></script>
     <style>
-        body { margin: 0; touch-action: none; }
-        #game-canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; }
-        #ui { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; display: flex; flex-direction: column; justify-content: space-between; padding: 16px; pointer-events: none; }
+        body { margin: 0; overflow: hidden; background: #050505; }
+        #ui { position: fixed; top:0; width: 100%; height: 100%; pointer-events: none; padding: 20px; }
         .interactive { pointer-events: auto; }
     </style>
 </head>
 <body>
 
     <div id="game-canvas"></div>
-
-    <div id="ui">
-        <!-- Header -->
-        <header class="flex justify-between items-center interactive bg-gray-900/80 p-3 rounded-2xl border border-gray-800 backdrop-blur-md">
-            <h1 class="text-xl font-bold text-white">BAKVA <span class="text-yellow-400">Metaverse</span></h1>
-            <div class="flex items-center gap-2">
-                <button id="soundBtn" class="bg-gray-800 p-2 rounded-full">🔈</button>
-                <button id="connectBtn" class="bg-emerald-600 px-4 py-2 rounded-full font-bold text-sm text-white">Connect</button>
-            </div>
+    <div id="ui" class="flex flex-col justify-between">
+        <header class="interactive flex justify-between bg-black/50 p-4 rounded-xl border border-yellow-500">
+            <h1 class="text-2xl font-bold text-yellow-500">BAKVA Guardians</h1>
+            <button id="connectBtn" onclick="connectWallet()" class="bg-emerald-600 px-4 py-2 rounded-lg text-white font-bold">Connect Wallet</button>
         </header>
 
-        <!-- Touch Controls -->
-        <div class="interactive grid grid-cols-3 gap-2 w-36 mx-auto mb-20">
-            <div></div>
-            <button id="btnW" class="bg-black/50 p-4 rounded-xl text-white font-bold border border-white/20">▲</button>
-            <div></div>
-            <button id="btnA" class="bg-black/50 p-4 rounded-xl text-white font-bold border border-white/20">◀</button>
-            <button id="btnS" class="bg-black/50 p-4 rounded-xl text-white font-bold border border-white/20">▼</button>
-            <button id="btnD" class="bg-black/50 p-4 rounded-xl text-white font-bold border border-white/20">▶</button>
-        </div>
-
-        <!-- Footer -->
-        <footer class="interactive grid grid-cols-4 gap-2 bg-gray-900/80 p-3 rounded-2xl border border-gray-800 backdrop-blur-md">
-            <button class="flex flex-col items-center text-xs text-gray-300">🎒 Inv</button>
-            <button class="flex flex-col items-center text-xs text-gray-300">🗺️ Map</button>
-            <button class="flex flex-col items-center text-xs text-gray-300">🛍️ Shop</button>
-            <button class="flex flex-col items-center text-xs text-emerald-300">💎 Stake</button>
+        <footer class="interactive grid grid-cols-4 gap-2 bg-black/50 p-4 rounded-xl">
+            <button onclick="showModal('Inventory', 'My Guardians: Shadow Dragon, Fire Wolf')" class="text-white">🎒 Inv</button>
+            <button onclick="showModal('Map', 'Teleport to: Forest, Volcano, Sky City')" class="text-white">🗺️ Map</button>
+            <button onclick="showModal('Shop', 'Buy New Egg: 500 BAKVA')" class="text-white">🛍️ Shop</button>
+            <button onclick="showModal('Stake', 'Stake your Guardian to earn 45% APY')" class="text-emerald-400">💎 Stake</button>
         </footer>
     </div>
 
+    <!-- Modal -->
+    <div id="modal" class="hidden absolute top-1/4 left-1/4 w-1/2 bg-gray-900 text-white p-6 rounded-xl border border-yellow-500 interactive">
+        <h2 id="m-title" class="text-xl mb-4 text-yellow-500"></h2>
+        <div id="m-body"></div>
+        <button onclick="document.getElementById('modal').classList.add('hidden')" class="mt-4 bg-red-600 px-4 py-2 rounded">Close</button>
+    </div>
+
     <script>
-        let scene, camera, renderer, player;
-        let keys = { w: false, s: false, a: false, d: false };
+        let scene, camera, renderer, player, guardian;
+
+        function showModal(t, b) {
+            document.getElementById('m-title').innerText = t;
+            document.getElementById('m-body').innerText = b;
+            document.getElementById('modal').classList.remove('hidden');
+        }
+
+        async function connectWallet() {
+            if(window.solana) {
+                const res = await window.solana.connect();
+                document.getElementById('connectBtn').innerText = res.publicKey.toString().slice(0,6) + "...";
+            } else { alert("Install Phantom!"); }
+        }
 
         function init() {
             scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x87CEEB);
-            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            renderer = new THREE.WebGLRenderer({ antialias: true });
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+            renderer = new THREE.WebGLRenderer({antialias: true});
             renderer.setSize(window.innerWidth, window.innerHeight);
             document.getElementById('game-canvas').appendChild(renderer.domElement);
 
-            scene.add(new THREE.AmbientLight(0xffffff, 0.7));
-            player = new THREE.Mesh(new THREE.ConeGeometry(0.5, 1, 32), new THREE.MeshPhongMaterial({ color: 0xFBBF24 }));
+            // Φωτισμός
+            scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+
+            // Παίκτης (Guardian Trainer)
+            player = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1), new THREE.MeshPhongMaterial({color: 0x3b82f6}));
             scene.add(player);
 
-            // Controls
-            const setupButton = (id, key) => {
-                const el = document.getElementById(id);
-                el.addEventListener('touchstart', (e) => { e.preventDefault(); keys[key] = true; });
-                el.addEventListener('touchend', (e) => { e.preventDefault(); keys[key] = false; });
-            };
-            setupButton('btnW', 'w'); setupButton('btnS', 's'); setupButton('btnA', 'a'); setupButton('btnD', 'd');
+            // Το Πλάσμα (Guardian)
+            guardian = new THREE.Mesh(new THREE.SphereGeometry(0.5, 16, 16), new THREE.MeshPhongMaterial({color: 0xf59e0b}));
+            guardian.position.set(2, 0, 0);
+            scene.add(guardian);
+
+            camera.position.set(0, 5, 10);
+            camera.lookAt(0,0,0);
             
             animate();
         }
 
         function animate() {
             requestAnimationFrame(animate);
-            if (keys.w) player.position.z -= 0.1;
-            if (keys.s) player.position.z += 0.1;
-            if (keys.a) player.position.x -= 0.1;
-            if (keys.d) player.position.x += 0.1;
-            
-            camera.position.set(player.position.x, player.position.y + 4, player.position.z + 8);
-            camera.lookAt(player.position);
+            // Το πλάσμα ακολουθεί μια κυκλική τροχιά γύρω από τον παίκτη
+            guardian.position.x = Math.sin(Date.now() * 0.002) * 2;
+            guardian.position.z = Math.cos(Date.now() * 0.002) * 2;
             renderer.render(scene, camera);
         }
         init();
