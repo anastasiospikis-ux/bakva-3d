@@ -11,41 +11,34 @@
         #game-canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; }
         #ui { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; display: flex; flex-direction: column; justify-content: space-between; padding: 16px; pointer-events: none; }
         .interactive { pointer-events: auto; }
+        /* Αόρατες περιοχές αφής για κίνηση */
+        .touch-zone { position: absolute; bottom: 100px; width: 100px; height: 100px; pointer-events: auto; opacity: 0; }
     </style>
 </head>
 <body>
 
-    <!-- 3D Canvas -->
     <div id="game-canvas"></div>
 
-    <!-- UI Overlay -->
+    <!-- Invisible Touch Controllers for movement -->
+    <div id="zoneW" class="touch-zone" style="left: 50%; transform: translateX(-50%); bottom: 180px;"></div>
+    <div id="zoneA" class="touch-zone" style="left: 10%; bottom: 100px;"></div>
+    <div id="zoneS" class="touch-zone" style="left: 50%; transform: translateX(-50%); bottom: 80px;"></div>
+    <div id="zoneD" class="touch-zone" style="right: 10%; bottom: 100px;"></div>
+
     <div id="ui">
-        <!-- Header -->
         <header class="flex justify-between items-center interactive bg-gray-900/80 p-3 rounded-2xl border border-gray-800 backdrop-blur-md">
             <h1 class="text-xl font-bold text-white">BAKVA <span class="text-yellow-400">Metaverse</span></h1>
-            <div class="flex items-center gap-2">
-                <button id="connectBtn" onclick="connectWallet()" class="bg-emerald-600 px-4 py-2 rounded-full font-bold text-sm text-white truncate max-w-[120px]">Connect Wallet</button>
-            </div>
+            <button id="connectBtn" onclick="connectWallet()" class="bg-emerald-600 px-4 py-2 rounded-full font-bold text-sm text-white truncate max-w-[120px]">Connect Wallet</button>
         </header>
 
-        <!-- Modal (Παράθυρα μενού) -->
         <div id="modal" class="interactive hidden self-center bg-gray-900/95 border border-yellow-500/50 p-6 rounded-2xl shadow-2xl max-w-sm w-full">
             <h3 id="modal-title" class="text-lg font-bold text-yellow-400 mb-3">Menu</h3>
             <div id="modal-body" class="text-sm text-gray-300 mb-5 space-y-3 max-h-48 overflow-y-auto"></div>
             <button onclick="closeModalWindow()" class="bg-yellow-500 text-gray-950 font-bold px-4 py-2 rounded-xl w-full">Close</button>
         </div>
 
-        <!-- Touch Controls (Για Κινητό) -->
-        <div class="interactive grid grid-cols-3 gap-2 w-36 mx-auto mb-2">
-            <div></div> 
-            <button id="btnW" class="bg-black/60 p-3 rounded-xl text-white font-bold border border-white/20 active:bg-yellow-500 active:text-black">▲</button> 
-            <div></div>
-            <button id="btnA" class="bg-black/60 p-3 rounded-xl text-white font-bold border border-white/20 active:bg-yellow-500 active:text-black">◀</button>
-            <button id="btnS" class="bg-black/60 p-3 rounded-xl text-white font-bold border border-white/20 active:bg-yellow-500 active:text-black">▼</button>
-            <button id="btnD" class="bg-black/60 p-3 rounded-xl text-white font-bold border border-white/20 active:bg-yellow-500 active:text-black">▶</button>
-        </div>
+        <div></div> <!-- Spacer for invisible buttons -->
 
-        <!-- Footer Menu -->
         <footer class="interactive grid grid-cols-4 gap-2 bg-gray-900/80 p-3 rounded-2xl border border-gray-800 backdrop-blur-md">
             <button onclick="openInventory()" class="flex flex-col items-center text-xs text-gray-300 py-1 hover:text-yellow-400">🎒 <span>Inv</span></button>
             <button onclick="openMap()" class="flex flex-col items-center text-xs text-gray-300 py-1 hover:text-yellow-400">🗺️ <span>Map</span></button>
@@ -54,243 +47,149 @@
         </footer>
     </div>
 
-    <!-- Script (3D Engine, Wallet & Game Logic) -->
     <script>
         let scene, camera, renderer, player, guardian;
         let keys = { w: false, s: false, a: false, d: false };
         let walletAddress = null;
-        let myInventory = [];
-        let worldItems = [];
+        let myInventory = ["Starter Guardian"];
 
-        // 1. Wallet Logic
         async function connectWallet() {
             if (window.solana && window.solana.isPhantom) {
                 try {
                     const resp = await window.solana.connect();
                     walletAddress = resp.publicKey.toString();
-                    const display = walletAddress.slice(0, 4) + "..." + walletAddress.slice(-4);
-                    document.getElementById('connectBtn').innerText = display;
+                    document.getElementById('connectBtn').innerText = walletAddress.slice(0, 4) + "..." + walletAddress.slice(-4);
                     document.getElementById('connectBtn').className = "bg-gray-700 px-4 py-2 rounded-full font-bold text-sm text-white";
                 } catch (err) { console.error(err); }
-            } else { 
-                alert("Please install Phantom Wallet!"); 
-                window.open("https://phantom.app/", "_blank"); 
-            }
+            } else { alert("Please install Phantom Wallet!"); window.open("https://phantom.app/", "_blank"); }
         }
 
-        // 2. UI / Modals Logic
-        function showModal(title, htmlContent) {
+        function showModal(title, html) {
             document.getElementById('modal-title').innerText = title;
-            document.getElementById('modal-body').innerHTML = htmlContent;
+            document.getElementById('modal-body').innerHTML = html;
             document.getElementById('modal').classList.remove('hidden');
         }
-
-        function closeModalWindow() {
-            document.getElementById('modal').classList.add('hidden');
-        }
+        function closeModalWindow() { document.getElementById('modal').classList.add('hidden'); }
 
         function openInventory() {
-            let html = myInventory.length === 0 ? "<p class='text-gray-400'>Your inventory is empty. Explore and collect items!</p>" : "";
-            myInventory.forEach(item => { html += `<div class="bg-gray-800 p-2 rounded-xl border border-gray-700 mb-1">✨ ${item}</div>`; });
+            let html = "";
+            myInventory.forEach(i => html += `<div class="bg-gray-800 p-2 rounded-xl mb-1">✨ ${i}</div>`);
             showModal("Inventory", html);
         }
+        function openMap() { showModal("Map & Teleport", `<button onclick="teleport(0,0)" class="w-full bg-gray-800 p-2 rounded-xl text-left">📍 Central Plaza</button>`); }
+        function openShop() { showModal("Shop", `<div class="flex justify-between items-center bg-gray-800 p-2 rounded-xl"><span>Booster</span> <button onclick="buyItem('Booster')" class="bg-yellow-500 text-black font-bold px-3 py-1 rounded-lg text-xs">Buy 100</button></div>`); }
+        function openStake() { showModal("Stake", `<p class="text-xs text-gray-400 mb-2">Earn 45% APY</p><button onclick="alert('Staked!')" class="w-full bg-emerald-600 py-2 rounded-xl font-bold text-white text-xs">START STAKING</button>`); }
+        
+        function buyItem(item) { myInventory.push(item); alert("Bought " + item); closeModalWindow(); }
+        function teleport(x, z) { player.position.x = x; player.position.z = z; closeModalWindow(); }
 
-        function openMap() {
-            showModal("World Map & Teleport", `
-                <div class="space-y-2">
-                    <button onclick="teleport(0, 0)" class="w-full bg-gray-800 p-2 rounded-xl text-left">📍 Central Plaza (0,0)</button>
-                    <button onclick="teleport(10, 10)" class="w-full bg-gray-800 p-2 rounded-xl text-left">🌲 Forest Zone (10,10)</button>
-                    <button onclick="teleport(-10, -10)" class="w-full bg-gray-800 p-2 rounded-xl text-left">⛰️ Mountain Base (-10,-10)</button>
-                </div>
-            `);
-        }
-
-        function openShop() {
-            showModal("Metaverse Shop", `
-                <div class="space-y-2">
-                    <div class="flex justify-between items-center bg-gray-800 p-2 rounded-xl">
-                        <span class="text-xs">⚡ Turbo Speed</span> 
-                        <button onclick="buyItem('Turbo Speed')" class="bg-yellow-500 text-black font-bold px-3 py-1 rounded-lg text-xs">Buy 100</button>
-                    </div>
-                    <div class="flex justify-between items-center bg-gray-800 p-2 rounded-xl">
-                        <span class="text-xs">🛡️ Guardian Shield</span> 
-                        <button onclick="buyItem('Guardian Shield')" class="bg-yellow-500 text-black font-bold px-3 py-1 rounded-lg text-xs">Buy 250</button>
-                    </div>
-                </div>
-            `);
-        }
-
-        function openStake() {
-            showModal("Token Staking", `
-                <div class="text-center space-y-3">
-                    <p class="text-xs text-gray-400">Lock your BAKVA tokens and earn up to 45% APY rewards automatically.</p>
-                    <input type="number" placeholder="Amount" class="w-full bg-gray-800 border border-gray-700 p-2 rounded-xl text-white text-center text-sm">
-                    <button onclick="alert('Staking initiated successfully!')" class="w-full bg-emerald-600 py-2 rounded-xl font-bold text-white text-xs">START STAKING</button>
-                </div>
-            `);
-        }
-
-        function buyItem(item) {
-            myInventory.push(item);
-            alert("Successfully purchased: " + item + "!");
-            closeModalWindow();
-        }
-
-        function teleport(x, z) {
-            player.position.x = x;
-            player.position.z = z;
-            closeModalWindow();
-        }
-
-        // 3. 3D World Setup (Three.js)
         function init() {
             scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x87CEEB); // Ανοιχτός γαλάζιος ουρανός
-            scene.fog = new THREE.Fog(0x87CEEB, 20, 70);
+            scene.background = new THREE.Color(0x87CEEB);
+            scene.fog = new THREE.Fog(0x87CEEB, 30, 90);
 
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             document.getElementById('game-canvas').appendChild(renderer.domElement);
 
-            // Φωτισμός
             scene.add(new THREE.AmbientLight(0xffffff, 0.8));
             const sun = new THREE.DirectionalLight(0xffffff, 1.2);
-            sun.position.set(10, 30, 10);
+            sun.position.set(20, 40, 20);
             scene.add(sun);
 
-            // Έδαφος (Πράσινο χορτάρι)
-            const ground = new THREE.Mesh(
-                new THREE.PlaneGeometry(150, 150),
-                new THREE.MeshPhongMaterial({ color: 0x228B22 })
-            );
+            // Έδαφος (Χορτάρι)
+            const ground = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.MeshPhongMaterial({ color: 0x228B22 }));
             ground.rotation.x = -Math.PI / 2;
             scene.add(ground);
 
-            // Χαρακτήρας (Ανθρωπάκι / Capsule)
+            // Λίμνες (Μπλε επιφάνειες)
+            const lakeMat = new THREE.MeshPhongMaterial({ color: 0x1E90FF, shininess: 90 });
+            const lake1 = new THREE.Mesh(new THREE.CircleGeometry(8, 32), lakeMat);
+            lake1.rotation.x = -Math.PI / 2;
+            lake1.position.set(15, 0.05, -15);
+            scene.add(lake1);
+
+            const lake2 = new THREE.Mesh(new THREE.CircleGeometry(6, 32), lakeMat);
+            lake2.rotation.x = -Math.PI / 2;
+            lake2.position.set(-20, 0.05, 20);
+            scene.add(lake2);
+
+            // Βουνά στο βάθος (Κώνοι)
+            const mountainMat = new THREE.MeshPhongMaterial({ color: 0x708090 });
+            for (let i = 0; i < 8; i++) {
+                const m = new THREE.Mesh(new THREE.ConeGeometry(12, 18, 4), mountainMat);
+                let angle = (i / 8) * Math.PI * 2;
+                m.position.set(Math.cos(angle) * 70, 9, Math.sin(angle) * 70);
+                scene.add(m);
+            }
+
+            // Χαρακτήρας
             player = new THREE.Group();
-            const body = new THREE.Mesh(
-                new THREE.CapsuleGeometry(0.4, 1, 4, 8),
-                new THREE.MeshPhongMaterial({ color: 0x3b82f6 })
-            );
+            const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.4, 1, 4, 8), new THREE.MeshPhongMaterial({ color: 0x3b82f6 }));
             body.position.y = 0.9;
             player.add(body);
-            player.position.y = 0;
             scene.add(player);
 
-            // Πλάσμα / Guardian (Σφαίρα που ακολουθεί)
-            guardian = new THREE.Mesh(
-                new THREE.SphereGeometry(0.3, 16, 16),
-                new THREE.MeshPhongMaterial({ color: 0xFBBF24, emissive: 0x553300 })
-            );
+            // Πλάσμα / Guardian
+            guardian = new THREE.Mesh(new THREE.SphereGeometry(0.3, 16, 16), new THREE.MeshPhongMaterial({ color: 0xFBBF24, emissive: 0x553300 }));
             scene.add(guardian);
 
-            // Δημιουργία Δέντρων στον κόσμο
+            // Δέντρα γύρω-γύρω
             function createTree(x, z) {
                 const tree = new THREE.Group();
-                // Κορμός
-                const trunk = new THREE.Mesh(
-                    new THREE.CylinderGeometry(0.2, 0.3, 1.5),
-                    new THREE.MeshPhongMaterial({ color: 0x8B4513 })
-                );
+                const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.3, 1.5), new THREE.MeshPhongMaterial({ color: 0x8B4513 }));
                 trunk.position.y = 0.75;
                 tree.add(trunk);
-                // Φύλλωμα
-                const leaves = new THREE.Mesh(
-                    new THREE.ConeGeometry(1, 2, 6),
-                    new THREE.MeshPhongMaterial({ color: 0x006400 })
-                );
-                leaves.position.y = 2;
+                const leaves = new THREE.Mesh(new THREE.ConeGeometry(1.2, 2.5, 6), new THREE.MeshPhongMaterial({ color: 0x006400 }));
+                leaves.position.y = 2.2;
                 tree.add(leaves);
                 tree.position.set(x, 0, z);
                 scene.add(tree);
             }
 
-            // Σπορά δέντρων γύρω-γύρω
-            for (let i = 0; i < 20; i++) {
-                let tx = (Math.random() - 0.5) * 60;
-                let tz = (Math.random() - 0.5) * 60;
-                if (Math.abs(tx) > 4 || Math.abs(tz) > 4) { // Να μην πέφτουν πάνω στον παίκτη στην αρχή
-                    createTree(tx, tz);
-                }
+            for (let i = 0; i < 30; i++) {
+                let tx = (Math.random() - 0.5) * 100;
+                let tz = (Math.random() - 0.5) * 100;
+                if (Math.abs(tx) > 6 || Math.abs(tz) > 6) createTree(tx, tz);
             }
 
-            // Δημιουργία Συλλεκτικών Items στον κόσμο
-            function spawnCollectible(name, x, z) {
-                const mesh = new THREE.Mesh(
-                    new THREE.BoxGeometry(0.5, 0.5, 0.5),
-                    new THREE.MeshPhongMaterial({ color: 0xffff00, shininess: 100 })
-                );
-                mesh.position.set(x, 0.25, z);
-                mesh.userData = { name: name };
-                scene.add(mesh);
-                worldItems.push(mesh);
-            }
-
-            spawnCollectible("Gold Coin", 5, 5);
-            spawnCollectible("Mystery Box", -6, 4);
-            spawnCollectible("Rare Gem", 8, -6);
-
-            // Keyboard Events (Υπολογιστής)
+            // Χειρισμός αφής/πληκτρολογίου
             window.addEventListener('keydown', e => { if(keys.hasOwnProperty(e.key.toLowerCase())) keys[e.key.toLowerCase()] = true; });
             window.addEventListener('keyup', e => { if(keys.hasOwnProperty(e.key.toLowerCase())) keys[e.key.toLowerCase()] = false; });
 
-            // Touch Events (Κινητό)
-            const setupBtn = (id, k) => {
+            const bindTouch = (id, k) => {
                 const el = document.getElementById(id);
                 el.addEventListener('touchstart', (e) => { e.preventDefault(); keys[k] = true; });
                 el.addEventListener('touchend', (e) => { e.preventDefault(); keys[k] = false; });
                 el.addEventListener('mousedown', () => keys[k] = true);
                 el.addEventListener('mouseup', () => keys[k] = false);
             };
-            setupBtn('btnW', 'w'); setupBtn('btnS', 's'); setupBtn('btnA', 'a'); setupBtn('btnD', 'd');
-
-            window.addEventListener('resize', () => {
-                camera.aspect = window.innerWidth / window.innerHeight;
-                camera.updateProjectionMatrix();
-                renderer.setSize(window.innerWidth, window.innerHeight);
-            });
+            bindTouch('zoneW', 'w'); bindTouch('zoneS', 's'); bindTouch('zoneA', 'a'); bindTouch('zoneD', 'd');
 
             animate();
         }
 
-        // Animation & Game Loop
         function animate() {
             requestAnimationFrame(animate);
-
-            // Κίνηση Παίκτη
-            const speed = 0.12;
+            const speed = 0.15;
             if (keys.w) player.position.z -= speed;
             if (keys.s) player.position.z += speed;
             if (keys.a) player.position.x -= speed;
             if (keys.d) player.position.x += speed;
 
-            // Κίνηση Πλάσματος (Guardian) γύρω από τον παίκτη
             const time = Date.now() * 0.003;
-            guardian.position.x = player.position.x + Math.sin(time) * 1.5;
-            guardian.position.z = player.position.z + Math.cos(time) * 1.5;
+            guardian.position.x = player.position.x + Math.sin(time) * 1.8;
+            guardian.position.z = player.position.z + Math.cos(time) * 1.8;
             guardian.position.y = 1 + Math.sin(time * 2) * 0.2;
 
-            // Έλεγχος συλλογής items
-            worldItems.forEach((item, index) => {
-                const dist = player.position.distanceTo(item.position);
-                if (dist < 1.2) {
-                    myInventory.push(item.userData.name);
-                    alert("You collected: " + item.userData.name + "!");
-                    scene.remove(item);
-                    worldItems.splice(index, 1);
-                }
-            });
-
-            // Κάμερα ακολουθεί τον παίκτη
             camera.position.x = player.position.x;
-            camera.position.z = player.position.z + 8;
-            camera.position.y = 4;
+            camera.position.z = player.position.z + 10;
+            camera.position.y = 5;
             camera.lookAt(player.position.x, player.position.y + 1, player.position.z);
 
             renderer.render(scene, camera);
         }
-
         init();
     </script>
 </body>
