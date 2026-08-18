@@ -1,67 +1,510 @@
-function createForestRealm() {
-  clearRealm();
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Drone Forest Game</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+  <script src="https://unpkg.com/three@0.160.0/examples/js/controls/OrbitControls.js"></script>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #87CEEB; /* sky blue */
+      touch-action: none;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    canvas { display: block; }
+    .touch-zone { touch-action: none; }
+  </style>
+</head>
+<body class="text-slate-100">
 
-  // Μπλε ουρανός
-  scene.background = new THREE.Color(0x87CEEB); // sky blue
-  scene.fog = new THREE.Fog(0x87CEEB, 20, 120);
+  <!-- HUD -->
+  <div class="fixed inset-0 pointer-events-none z-10">
+    <div class="flex justify-between items-center px-4 pt-3 pointer-events-auto">
+      <div class="flex flex-col gap-1">
+        <div class="flex items-center gap-2">
+          <span class="text-[11px] uppercase tracking-wide text-slate-800">HP</span>
+          <div class="w-32 h-2 bg-slate-300 rounded-full overflow-hidden">
+            <div id="hpBar" class="h-2 bg-red-500 rounded-full" style="width: 100%;"></div>
+          </div>
+          <span id="hpText" class="text-[11px] text-slate-800">100 / 100</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-[11px] uppercase tracking-wide text-slate-800">XP</span>
+          <div class="w-32 h-2 bg-slate-300 rounded-full overflow-hidden">
+            <div id="xpBar" class="h-2 bg-emerald-500 rounded-full" style="width: 0%;"></div>
+          </div>
+          <span id="xpText" class="text-[11px] text-slate-800">Lv. 1</span>
+        </div>
+      </div>
 
-  // Φως ημέρας
-  const hemiLight = new THREE.HemisphereLight(0x87CEEB, 0x228B22, 1.0);
-  scene.add(hemiLight);
+      <div class="flex flex-col items-end gap-1">
+        <div class="inline-flex flex-col gap-1 bg-white/80 border border-slate-300 rounded-lg px-3 py-2 text-[11px] max-w-xs">
+          <span class="uppercase tracking-wide text-slate-700">Active Quest</span>
+          <span id="questTitle" class="font-semibold text-slate-900">Collect 10 Energy Shards</span>
+          <span id="questProgress" class="text-slate-600">0 / 10</span>
+        </div>
+        <div class="hidden md:block text-[11px] text-slate-800 bg-white/80 border border-slate-300 rounded px-2 py-1">
+          WASD για κίνηση • Drag για κάμερα • Μάζεψε κρυστάλλους, απόφυγε εμπόδια
+        </div>
+      </div>
+    </div>
 
-  const sun = new THREE.DirectionalLight(0xffffff, 1.2);
-  sun.position.set(50, 100, 30);
-  sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
-  scene.add(sun);
+    <!-- Mobile touch zones -->
+    <div class="md:hidden fixed inset-0 flex justify-between items-end pointer-events-none">
+      <div class="w-1/2 h-40 touch-zone pointer-events-auto flex items-center justify-center">
+        <div class="w-24 h-24 rounded-full border border-slate-400 bg-white/60 flex items-center justify-center text-[10px] text-slate-800">
+          Move
+        </div>
+      </div>
+      <div class="w-1/2 h-40 touch-zone pointer-events-auto flex items-center justify-center">
+        <div class="w-24 h-24 rounded-full border border-slate-400 bg-white/60 flex items-center justify-center text-[10px] text-slate-800">
+          Look
+        </div>
+      </div>
+    </div>
+  </div>
 
-  // Πράσινο έδαφος
-  const groundGeo = new THREE.PlaneGeometry(500, 500);
-  const groundMat = new THREE.MeshStandardMaterial({
-    color: 0x3a5f0b,
-    roughness: 0.9,
-    metalness: 0.1
-  });
-  const ground = new THREE.Mesh(groundGeo, groundMat);
-  ground.rotation.x = -Math.PI / 2;
-  ground.receiveShadow = true;
-  scene.add(ground);
-  realmObjects.push(ground);
+  <div id="scene-container"></div>
 
-  // Δέντρα
-  const trunkGeo = new THREE.CylinderGeometry(0.4, 0.6, 4, 8);
-  const trunkMat = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
+  <script>
+    // ---------- Game state ----------
+    const gameState = {
+      hp: 100,
+      maxHp: 100,
+      xp: 0,
+      level: 1,
+      quest: {
+        title: 'Collect 10 Energy Shards',
+        target: 10,
+        current: 0
+      }
+    };
 
-  const leavesGeo = new THREE.SphereGeometry(2.5, 16, 16);
-  const leavesMat = new THREE.MeshStandardMaterial({ color: 0x2E8B57 });
+    const hpBar = document.getElementById('hpBar');
+    const hpText = document.getElementById('hpText');
+    const xpBar = document.getElementById('xpBar');
+    const xpText = document.getElementById('xpText');
+    const questTitle = document.getElementById('questTitle');
+    const questProgress = document.getElementById('questProgress');
 
-  for (let i = 0; i < 120; i++) {
-    const tree = new THREE.Group();
+    function updateHUD() {
+      const hpPercent = (gameState.hp / gameState.maxHp) * 100;
+      hpBar.style.width = hpPercent + '%';
+      hpText.textContent = `${gameState.hp} / ${gameState.maxHp}`;
 
-    const trunk = new THREE.Mesh(trunkGeo, trunkMat);
-    trunk.position.y = 2;
-    trunk.castShadow = true;
+      const xpPercent = Math.min((gameState.xp % 100) / 100 * 100, 100);
+      xpBar.style.width = xpPercent + '%';
+      xpText.textContent = `Lv. ${gameState.level}`;
 
-    const leaves = new THREE.Mesh(leavesGeo, leavesMat);
-    leaves.position.y = 5;
-    leaves.castShadow = true;
+      questTitle.textContent = gameState.quest.title;
+      questProgress.textContent = `${gameState.quest.current} / ${gameState.quest.target}`;
+    }
 
-    tree.add(trunk);
-    tree.add(leaves);
+    function addXP(amount) {
+      gameState.xp += amount;
+      if (gameState.xp >= gameState.level * 100) {
+        gameState.level++;
+        gameState.maxHp += 10;
+        gameState.hp = gameState.maxHp;
+      }
+      updateHUD();
+    }
 
-    tree.position.set(
-      (Math.random() - 0.5) * 400,
-      0,
-      (Math.random() - 0.5) * 400
-    );
+    function takeDamage(amount) {
+      gameState.hp -= amount;
+      if (gameState.hp <= 0) {
+        gameState.hp = 0;
+        playerGroup.position.set(0, 1.5, 0);
+        gameState.hp = gameState.maxHp;
+        gameState.quest.current = 0;
+      }
+      updateHUD();
+    }
 
-    scene.add(tree);
-    realmObjects.push(tree);
-  }
+    function addQuestProgress(amount) {
+      gameState.quest.current += amount;
+      if (gameState.quest.current >= gameState.quest.target) {
+        gameState.quest.current = gameState.quest.target;
+        addXP(50);
+        gameState.quest = {
+          title: 'Survive hazards for 30 seconds',
+          target: 30,
+          current: 0
+        };
+      }
+      updateHUD();
+    }
 
-  // Συλλεκτικά αντικείμενα
-  spawnCollectibles(20, 200, 0x00ff88);
+    // ---------- Three.js setup ----------
+    let scene, camera, renderer, controls;
+    let player, guardian, playerGroup;
+    let clock = new THREE.Clock();
+    let realmObjects = [];
+    let collectibles = [];
+    let hazards = [];
 
-  // Εμπόδια
-  spawnHazards(10, 200, 0xff4444);
-}
+    const container = document.getElementById('scene-container');
+
+    function initRenderer() {
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.outputEncoding = THREE.sRGBEncoding;
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      container.appendChild(renderer.domElement);
+    }
+
+    function initScene() {
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x87CEEB); // sky blue
+      scene.fog = new THREE.Fog(0x87CEEB, 30, 200);
+
+      camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 500);
+      camera.position.set(0, 5, 12);
+
+      const hemiLight = new THREE.HemisphereLight(0x87CEEB, 0x228B22, 0.8);
+      scene.add(hemiLight);
+
+      const sun = new THREE.DirectionalLight(0xffffff, 1.2);
+      sun.position.set(50, 100, 30);
+      sun.castShadow = true;
+      sun.shadow.mapSize.set(2048, 2048);
+      scene.add(sun);
+
+      const ambient = new THREE.AmbientLight(0xffffff, 0.3);
+      scene.add(ambient);
+    }
+
+    function initControls() {
+      controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.08;
+      controls.enablePan = false;
+      controls.minDistance = 5;
+      controls.maxDistance = 30;
+      controls.target.set(0, 2, 0);
+      controls.update();
+    }
+
+    function createPlayer() {
+      playerGroup = new THREE.Group();
+      scene.add(playerGroup);
+
+      const coreGeo = new THREE.SphereGeometry(0.6, 32, 32);
+      const coreMat = new THREE.MeshStandardMaterial({
+        color: 0x66ccff,
+        emissive: 0x33aaff,
+        emissiveIntensity: 1.2,
+        roughness: 0.2,
+        metalness: 0.7
+      });
+      player = new THREE.Mesh(coreGeo, coreMat);
+      player.castShadow = true;
+      playerGroup.add(player);
+
+      const ringGeo = new THREE.TorusGeometry(1.1, 0.06, 16, 64);
+      const ringMat = new THREE.MeshStandardMaterial({
+        color: 0x99ffff,
+        emissive: 0x33ffff,
+        emissiveIntensity: 1.0,
+        roughness: 0.1,
+        metalness: 0.8
+      });
+      const ring = new THREE.Mesh(ringGeo, ringMat);
+      ring.rotation.x = Math.PI / 2;
+      playerGroup.add(ring);
+
+      const guardianGeo = new THREE.IcosahedronGeometry(0.3, 1);
+      const guardianMat = new THREE.MeshStandardMaterial({
+        color: 0xff99ff,
+        emissive: 0xff33ff,
+        emissiveIntensity: 1.3,
+        roughness: 0.3,
+        metalness: 0.9
+      });
+      guardian = new THREE.Mesh(guardianGeo, guardianMat);
+      guardian.position.set(1.8, 0.8, 0);
+      guardian.castShadow = true;
+      playerGroup.add(guardian);
+
+      playerGroup.position.set(0, 1.5, 0);
+    }
+
+    function clearRealm() {
+      realmObjects.forEach(obj => scene.remove(obj));
+      collectibles.forEach(obj => scene.remove(obj));
+      hazards.forEach(obj => scene.remove(obj));
+      realmObjects = [];
+      collectibles = [];
+      hazards = [];
+    }
+
+    function spawnCollectibles(count, areaSize, color) {
+      const geo = new THREE.SphereGeometry(0.25, 16, 16);
+      const mat = new THREE.MeshStandardMaterial({
+        color,
+        emissive: color,
+        emissiveIntensity: 1.2,
+        roughness: 0.3,
+        metalness: 0.8
+      });
+      for (let i = 0; i < count; i++) {
+        const c = new THREE.Mesh(geo, mat);
+        c.position.set(
+          (Math.random() - 0.5) * areaSize,
+          1 + Math.random() * 2,
+          (Math.random() - 0.5) * areaSize
+        );
+        c.userData.type = 'collectible';
+        scene.add(c);
+        collectibles.push(c);
+      }
+    }
+
+    function spawnHazards(count, areaSize, color) {
+      const geo = new THREE.BoxGeometry(0.8, 0.8, 0.8);
+      const mat = new THREE.MeshStandardMaterial({
+        color,
+        emissive: color,
+        emissiveIntensity: 0.8,
+        roughness: 0.4,
+        metalness: 0.7
+      });
+      for (let i = 0; i < count; i++) {
+        const h = new THREE.Mesh(geo, mat);
+        h.position.set(
+          (Math.random() - 0.5) * areaSize,
+          1,
+          (Math.random() - 0.5) * areaSize
+        );
+        h.userData.type = 'hazard';
+        scene.add(h);
+        hazards.push(h);
+      }
+    }
+
+    function createForestRealm() {
+      clearRealm();
+
+      scene.background = new THREE.Color(0x87CEEB);
+      scene.fog = new THREE.Fog(0x87CEEB, 30, 200);
+
+      const groundGeo = new THREE.PlaneGeometry(500, 500);
+      const groundMat = new THREE.MeshStandardMaterial({
+        color: 0x3a5f0b,
+        roughness: 0.9,
+        metalness: 0.1
+      });
+      const ground = new THREE.Mesh(groundGeo, groundMat);
+      ground.rotation.x = -Math.PI / 2;
+      ground.receiveShadow = true;
+      scene.add(ground);
+      realmObjects.push(ground);
+
+      const trunkGeo = new THREE.CylinderGeometry(0.4, 0.6, 4, 8);
+      const trunkMat = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
+
+      const leavesGeo = new THREE.SphereGeometry(2.5, 16, 16);
+      const leavesMat = new THREE.MeshStandardMaterial({ color: 0x2E8B57 });
+
+      for (let i = 0; i < 120; i++) {
+        const tree = new THREE.Group();
+
+        const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+        trunk.position.y = 2;
+        trunk.castShadow = true;
+
+        const leaves = new THREE.Mesh(leavesGeo, leavesMat);
+        leaves.position.y = 5;
+        leaves.castShadow = true;
+
+        tree.add(trunk);
+        tree.add(leaves);
+
+        tree.position.set(
+          (Math.random() - 0.5) * 400,
+          0,
+          (Math.random() - 0.5) * 400
+        );
+
+        scene.add(tree);
+        realmObjects.push(tree);
+      }
+
+      spawnCollectibles(20, 200, 0x00ff88);
+      spawnHazards(10, 200, 0xff4444);
+
+      playerGroup.position.set(0, 1.5, 0);
+      controls.target.copy(playerGroup.position);
+    }
+
+    // ---------- Movement ----------
+    const keys = { w: false, a: false, s: false, d: false };
+    const moveSpeed = 8;
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'w' || e.key === 'W') keys.w = true;
+      if (e.key === 'a' || e.key === 'A') keys.a = true;
+      if (e.key === 's' || e.key === 'S') keys.s = true;
+      if (e.key === 'd' || e.key === 'D') keys.d = true;
+    });
+
+    window.addEventListener('keyup', (e) => {
+      if (e.key === 'w' || e.key === 'W') keys.w = false;
+      if (e.key === 'a' || e.key === 'A') keys.a = false;
+      if (e.key === 's' || e.key === 'S') keys.s = false;
+      if (e.key === 'd' || e.key === 'D') keys.d = false;
+    });
+
+    const touchZones = document.querySelectorAll('.touch-zone');
+    let moveTouchId = null;
+    let lookTouchId = null;
+    let moveVector = new THREE.Vector2(0, 0);
+
+    touchZones[0].addEventListener('touchstart', (e) => {
+      if (moveTouchId === null && e.changedTouches.length > 0) {
+        moveTouchId = e.changedTouches[0].identifier;
+      }
+    }, { passive: false });
+
+    touchZones[0].addEventListener('touchmove', (e) => {
+      for (const t of e.changedTouches) {
+        if (t.identifier === moveTouchId) {
+          const rect = e.target.getBoundingClientRect();
+          const cx = rect.left + rect.width / 2;
+          const cy = rect.top + rect.height / 2;
+          const dx = t.clientX - cx;
+          const dy = t.clientY - cy;
+          const max = rect.width / 2;
+          moveVector.set(dx / max, dy / max);
+        }
+      }
+      e.preventDefault();
+    }, { passive: false });
+
+    touchZones[0].addEventListener('touchend', (e) => {
+      for (const t of e.changedTouches) {
+        if (t.identifier === moveTouchId) {
+          moveTouchId = null;
+          moveVector.set(0, 0);
+        }
+      }
+    });
+
+    touchZones[1].addEventListener('touchstart', (e) => {
+      if (lookTouchId === null && e.changedTouches.length > 0) {
+        lookTouchId = e.changedTouches[0].identifier;
+      }
+    }, { passive: false });
+
+    touchZones[1].addEventListener('touchmove', (e) => {
+      for (const t of e.changedTouches) {
+        if (t.identifier === lookTouchId) {
+          const dx = t.movementX || 0;
+          const dy = t.movementY || 0;
+          controls.rotateLeft(dx * 0.005);
+          controls.rotateUp(dy * 0.005);
+        }
+      }
+      e.preventDefault();
+    }, { passive: false });
+
+    touchZones[1].addEventListener('touchend', (e) => {
+      for (const t of e.changedTouches) {
+        if (t.identifier === lookTouchId) {
+          lookTouchId = null;
+        }
+      }
+    });
+
+    function updateMovement(delta) {
+      const forward = new THREE.Vector3();
+      camera.getWorldDirection(forward);
+      forward.y = 0;
+      forward.normalize();
+
+      const right = new THREE.Vector3().crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
+
+      let moveX = 0;
+      let moveZ = 0;
+
+      if (keys.w) moveZ -= 1;
+      if (keys.s) moveZ += 1;
+      if (keys.a) moveX -= 1;
+      if (keys.d) moveX += 1;
+
+      moveX += moveVector.x;
+      moveZ += moveVector.y;
+
+      const moveDir = new THREE.Vector3();
+      moveDir.addScaledVector(forward, moveZ);
+      moveDir.addScaledVector(right, moveX);
+      if (moveDir.lengthSq() > 0) {
+        moveDir.normalize();
+        playerGroup.position.addScaledVector(moveDir, moveSpeed * delta);
+        controls.target.copy(playerGroup.position);
+      }
+    }
+
+    // ---------- Collisions ----------
+    function checkCollisions() {
+      const playerPos = playerGroup.position;
+
+      collectibles = collectibles.filter(c => {
+        if (c.position.distanceTo(playerPos) < 1.0) {
+          scene.remove(c);
+          addQuestProgress(1);
+          addXP(10);
+          return false;
+        }
+        return true;
+      });
+
+      hazards.forEach(h => {
+        if (h.position.distanceTo(playerPos) < 1.2) {
+          takeDamage(5);
+        }
+      });
+    }
+
+    // ---------- Animation ----------
+    function animate() {
+      requestAnimationFrame(animate);
+      const delta = clock.getDelta();
+      const t = clock.elapsedTime;
+
+      playerGroup.position.y = 1.5 + Math.sin(t * 1.5) * 0.1;
+      guardian.position.x = 1.8 * Math.cos(t * 1.2);
+      guardian.position.z = 1.8 * Math.sin(t * 1.2);
+      guardian.position.y = 0.8 + Math.sin(t * 2.0) * 0.2;
+      guardian.rotation.y += delta * 2.0;
+
+      updateMovement(delta);
+      checkCollisions();
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    // ---------- Resize ----------
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // ---------- Init ----------
+    initRenderer();
+    initScene();
+    initControls();
+    createPlayer();
+    updateHUD();
+    createForestRealm();
+    animate();
+  </script>
+</body>
+</html>
